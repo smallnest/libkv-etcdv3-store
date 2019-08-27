@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/coreos/etcd/clientv3/concurrency"
@@ -51,6 +52,9 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 
 		cfg.AutoSyncInterval = 5 * time.Minute
 	}
+	if s.timeout == 0 {
+		s.timeout = 10 * time.Second
+	}
 
 	cli, err := clientv3.New(cfg)
 	if err != nil {
@@ -81,6 +85,11 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 	}()
 
 	return s, nil
+}
+
+func (s *EtcdV3) normalize(key string) string {
+	key = store.Normalize(key)
+	return strings.TrimPrefix(key, "/")
 }
 
 // Put a value at the specified key
