@@ -195,23 +195,12 @@ func (s *EtcdV3) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*
 			select {
 			case <-s.done:
 				return
-			case wresp := <-rch:
-				if len(wresp.Events) > 0 {
-					var pairs []*store.KVPair
-					for _, event := range wresp.Events {
-						pairs = append(pairs, &store.KVPair{
-							Key:       string(event.Kv.Key),
-							Value:     event.Kv.Value,
-							LastIndex: uint64(event.Kv.Version),
-						})
-					}
-					watchCh <- pairs
+			case <-rch:
+				list, err := s.List(directory)
+				if err != nil {
+				        return
 				}
-
-				// error
-				if wresp.Err() != nil {
-					return
-				}
+				watchCh <- list
 			}
 		}
 	}()
