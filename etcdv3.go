@@ -188,7 +188,10 @@ func (s *EtcdV3) WatchTree(directory string, stopCh <-chan struct{}) (<-chan []*
 		if err != nil {
 			return
 		}
-		watchCh <- list
+
+		if len(list) > 0 {
+			watchCh <- list
+		}
 
 		rch := s.client.Watch(context.Background(), directory, clientv3.WithPrefix())
 		for {
