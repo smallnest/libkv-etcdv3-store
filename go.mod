@@ -37,3 +37,8 @@ require (
 	google.golang.org/grpc v1.28.0 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect
 )
+
+replace (
+	go.etcd.io/bbolt => github.com/coreos/bbolt v1.3.4
+	google.golang.org/grpc => google.golang.org/grpc v1.26.0
+)
