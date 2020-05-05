@@ -98,6 +98,14 @@ func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) erro
 	_, err := s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
 	cancel()
 
+	if err != nil && strings.Contains(err.Error(), "requested lease not found") {
+		var resp *clientv3.LeaseGrantResponse
+		resp, err = s.client.Grant(context.Background(), 30)
+		if err == nil {
+			s.leaseID = resp.ID
+		}
+	}
+
 	return err
 }
 
