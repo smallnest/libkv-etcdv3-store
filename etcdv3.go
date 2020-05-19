@@ -23,6 +23,7 @@ type EtcdV3 struct {
 	timeout time.Duration
 	client  *clientv3.Client
 	leaseID clientv3.LeaseID
+	cfg     clientv3.Config
 	done    chan struct{}
 }
 
@@ -55,23 +56,16 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 	if s.timeout == 0 {
 		s.timeout = 10 * time.Second
 	}
-
-	cli, err := clientv3.New(cfg)
+	s.cfg = cfg
+	err := s.init()
 	if err != nil {
 		return nil, err
 	}
-
-	s.client = cli
-
-	resp, err := cli.Grant(context.Background(), 30)
-	if err != nil {
-		cli.Close()
-		return nil, err
-	}
-	s.leaseID = resp.ID
 
 	go func() {
-		ch, kaerr := cli.KeepAlive(context.Background(), resp.ID)
+	rekeepalive:
+		cli := s.client
+		ch, kaerr := cli.KeepAlive(context.Background(), s.leaseID)
 		if kaerr != nil {
 			log.Fatal(kaerr)
 		}
@@ -79,12 +73,46 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 			select {
 			case <-s.done:
 				return
-			case <-ch:
+			case resp := <-ch:
+				if resp == nil { // connection is closed
+					cli.Close()
+					for {
+						select {
+						case <-s.done:
+							return
+						default:
+							err = s.init()
+							if err != nil {
+								time.Sleep(time.Second)
+							}
+							goto rekeepalive
+						}
+
+					}
+
+				}
 			}
 		}
 	}()
 
 	return s, nil
+}
+
+func (s *EtcdV3) init() error {
+	cli, err := clientv3.New(s.cfg)
+	if err != nil {
+		return err
+	}
+
+	s.client = cli
+
+	resp, err := cli.Grant(context.Background(), 30)
+	if err != nil {
+		cli.Close()
+		return err
+	}
+	s.leaseID = resp.ID
+	return nil
 }
 
 func (s *EtcdV3) normalize(key string) string {
