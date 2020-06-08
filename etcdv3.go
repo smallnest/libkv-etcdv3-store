@@ -84,6 +84,7 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 							err = s.init()
 							if err != nil {
 								time.Sleep(time.Second)
+								continue
 							}
 							goto rekeepalive
 						}
