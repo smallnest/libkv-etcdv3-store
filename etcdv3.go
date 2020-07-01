@@ -106,13 +106,6 @@ func (s *EtcdV3) init() error {
 	}
 
 	s.client = cli
-
-	resp, err := cli.Grant(context.Background(), 30)
-	if err != nil {
-		cli.Close()
-		return err
-	}
-	s.leaseID = resp.ID
 	return nil
 }
 
@@ -121,19 +114,45 @@ func (s *EtcdV3) normalize(key string) string {
 	return strings.TrimPrefix(key, "/")
 }
 
+func (s *EtcdV3) grant(ttl int64) error {
+	resp, err := s.client.Grant(context.Background(), ttl)
+	if err == nil {
+		s.leaseID = resp.ID
+	}
+	return err
+}
+
 // Put a value at the specified key
 func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) error {
+	ttl := int64(options.TTL.Seconds())
+	if ttl == 0 {
+		ttl = 30
+	}
+
+	// init leaseID
+	if s.leaseID == 0 {
+		err := s.grant(ttl)
+		if err != nil {
+			return err
+		}
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	_, err := s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
 	cancel()
 
+	// tryty
 	if err != nil && strings.Contains(err.Error(), "requested lease not found") {
-		var resp *clientv3.LeaseGrantResponse
-		resp, err = s.client.Grant(context.Background(), 30)
-		if err == nil {
-			s.leaseID = resp.ID
+		err := s.grant(ttl)
+		if err != nil {
+			return err
 		}
 	}
+
+	// reput with leaseID
+	ctx, cancel = context.WithTimeout(context.Background(), s.timeout)
+	_, err = s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
+	cancel()
 
 	return err
 }
