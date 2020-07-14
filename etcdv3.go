@@ -3,7 +3,6 @@ package etcdv3
 import (
 	"context"
 	"errors"
-	"log"
 	"strings"
 	"time"
 
@@ -20,11 +19,12 @@ const (
 
 // EtcdV3 is the receiver type for the Store interface
 type EtcdV3 struct {
-	timeout time.Duration
-	client  *clientv3.Client
-	leaseID clientv3.LeaseID
-	cfg     clientv3.Config
-	done    chan struct{}
+	timeout        time.Duration
+	client         *clientv3.Client
+	leaseID        clientv3.LeaseID
+	cfg            clientv3.Config
+	done           chan struct{}
+	startKeepAlive chan struct{}
 }
 
 // Register registers etcd to libkv
@@ -36,7 +36,8 @@ func Register() {
 // of endpoints and an optional tls config
 func New(addrs []string, options *store.Config) (store.Store, error) {
 	s := &EtcdV3{
-		done: make(chan struct{}),
+		done:           make(chan struct{}),
+		startKeepAlive: make(chan struct{}),
 	}
 
 	cfg := clientv3.Config{
@@ -63,12 +64,22 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 	}
 
 	go func() {
+		<-s.startKeepAlive
+
+		var ch <-chan *clientv3.LeaseKeepAliveResponse
+		var kaerr error
 	rekeepalive:
 		cli := s.client
-		ch, kaerr := cli.KeepAlive(context.Background(), s.leaseID)
-		if kaerr != nil {
-			log.Fatal(kaerr)
+		for {
+			if s.leaseID != 0 {
+				ch, kaerr = cli.KeepAlive(context.Background(), s.leaseID)
+			}
+			if kaerr == nil {
+				break
+			}
+			time.Sleep(time.Second)
 		}
+
 		for {
 			select {
 			case <-s.done:
@@ -135,13 +146,14 @@ func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) erro
 		if err != nil {
 			return err
 		}
+		close(s.startKeepAlive)
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
 	_, err := s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
 	cancel()
 
-	// tryty
+	// try
 	if err != nil && strings.Contains(err.Error(), "requested lease not found") {
 		err := s.grant(ttl)
 		if err != nil {
