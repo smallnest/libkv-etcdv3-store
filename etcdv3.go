@@ -154,7 +154,7 @@ func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) erro
 	cancel()
 
 	// try again
-	if strings.Contains(err.Error(), "grpc: the client connection is closing") {
+	if err != nil && strings.Contains(err.Error(), "grpc: the client connection is closing") {
 		s.client.Close()
 		err = s.init()
 		if err != nil {
