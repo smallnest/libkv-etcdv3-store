@@ -141,7 +141,10 @@ func (s *EtcdV3) grant(ttl int64) error {
 
 // Put a value at the specified key
 func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) error {
-	ttl := int64(options.TTL.Seconds())
+	var ttl int64
+	if options != nil{
+		ttl = int64(options.TTL.Seconds())
+	}
 	if ttl == 0 {
 		ttl = 30
 	}
