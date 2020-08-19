@@ -97,6 +97,12 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 								time.Sleep(time.Second)
 								continue
 							}
+							err = s.grant(30)
+							if err != nil {
+								s.client.Close()
+								time.Sleep(time.Second)
+								continue
+							}
 							goto rekeepalive
 						}
 
@@ -135,7 +141,10 @@ func (s *EtcdV3) grant(ttl int64) error {
 
 // Put a value at the specified key
 func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) error {
-	ttl := int64(options.TTL.Seconds())
+	var ttl int64
+	if options != nil{
+		ttl = int64(options.TTL.Seconds())
+	}
 	if ttl == 0 {
 		ttl = 30
 	}
@@ -175,12 +184,11 @@ func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) erro
 		if err != nil {
 			return err
 		}
+		// reput with leaseID
+		ctx, cancel = context.WithTimeout(context.Background(), s.timeout)
+		_, err = s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
+		cancel()
 	}
-
-	// reput with leaseID
-	ctx, cancel = context.WithTimeout(context.Background(), s.timeout)
-	_, err = s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
-	cancel()
 
 	return err
 }
