@@ -17,6 +17,8 @@ const (
 	ETCDV3 store.Backend = "etcdv3"
 )
 
+const defaultTTL = 30
+
 // EtcdV3 is the receiver type for the Store interface
 type EtcdV3 struct {
 	timeout        time.Duration
@@ -25,6 +27,7 @@ type EtcdV3 struct {
 	cfg            clientv3.Config
 	done           chan struct{}
 	startKeepAlive chan struct{}
+	ttl            int64
 }
 
 // Register registers etcd to libkv
@@ -38,6 +41,7 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 	s := &EtcdV3{
 		done:           make(chan struct{}),
 		startKeepAlive: make(chan struct{}),
+		ttl:            defaultTTL,
 	}
 
 	cfg := clientv3.Config{
@@ -97,7 +101,7 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 								time.Sleep(time.Second)
 								continue
 							}
-							err = s.grant(30)
+							err = s.grant(s.ttl)
 							if err != nil {
 								s.client.Close()
 								time.Sleep(time.Second)
@@ -142,12 +146,13 @@ func (s *EtcdV3) grant(ttl int64) error {
 // Put a value at the specified key
 func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) error {
 	var ttl int64
-	if options != nil{
+	if options != nil {
 		ttl = int64(options.TTL.Seconds())
 	}
 	if ttl == 0 {
-		ttl = 30
+		ttl = defaultTTL
 	}
+	s.ttl = ttl
 
 	// init leaseID
 	if s.leaseID == 0 {
