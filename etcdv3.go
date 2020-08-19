@@ -184,12 +184,11 @@ func (s *EtcdV3) Put(key string, value []byte, options *store.WriteOptions) erro
 		if err != nil {
 			return err
 		}
+		// reput with leaseID
+		ctx, cancel = context.WithTimeout(context.Background(), s.timeout)
+		_, err = s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
+		cancel()
 	}
-
-	// reput with leaseID
-	ctx, cancel = context.WithTimeout(context.Background(), s.timeout)
-	_, err = s.client.Put(ctx, key, string(value), clientv3.WithLease(s.leaseID))
-	cancel()
 
 	return err
 }
