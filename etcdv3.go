@@ -97,6 +97,12 @@ func New(addrs []string, options *store.Config) (store.Store, error) {
 								time.Sleep(time.Second)
 								continue
 							}
+							err = s.grant(30)
+							if err != nil {
+								s.client.Close()
+								time.Sleep(time.Second)
+								continue
+							}
 							goto rekeepalive
 						}
 
