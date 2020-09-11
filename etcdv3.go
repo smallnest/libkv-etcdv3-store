@@ -132,7 +132,9 @@ func (s *EtcdV3) normalize(key string) string {
 }
 
 func (s *EtcdV3) grant(ttl int64) error {
-	resp, err := s.client.Grant(context.Background(), ttl)
+	ctx, cancel := context.WithTimeout(context.Background(), s.timeout)
+	resp, err := s.client.Grant(ctx, ttl)
+	cancel()
 	if err == nil {
 		s.leaseID = resp.ID
 	}
